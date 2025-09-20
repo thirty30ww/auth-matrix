@@ -1,0 +1,6 @@
+[submodule "frontend"]
+	path = frontend
+	url = git@github.com:thirty30ww/auth-matrix-frontend.git
+[submodule "backend"]
+	path = backend
+	url = git@github.com:thirty30ww/auth-matrix-backend.git

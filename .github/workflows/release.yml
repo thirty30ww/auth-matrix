@@ -1,4 +1,4 @@
-name: Auto Build and Release
+name: 自动构建与发布
 on:
   push:
     tags: v*  # 监听 v 开头的标签（如 v1.0.0）
@@ -6,77 +6,85 @@ on:
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
-    # 新增权限配置
     permissions:
       contents: write  # 允许创建 Release
-      packages: write  # 如需上传到 GitHub Packages
     steps:
-      # 步骤 1：拉取代码（强制 HTTPS 协议拉取子模块）
-      - name: Checkout with submodules
+      # 步骤 1：拉取代码（支持 SSH 子模块克隆）
+      - name: 拉取代码（含子模块）
         uses: actions/checkout@v4
         with:
-          submodules: recursive
-          token: ${{ secrets.GITHUB_TOKEN }}
-          persist-credentials: true
+          submodules: recursive  # 递归拉取子模块
+          ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}  # 用于 SSH 子模块克隆（需配置）
 
-      # 步骤 2：获取版本信息
-      - name: Extract version info
+      # 步骤 2：获取子模块版本（修复 unknown 问题）
+      - name: 获取版本信息
         id: version-info
         run: |
           TAG_NAME=${GITHUB_REF#refs/tags/}
+          
+          # 获取后端版本（优先标签，无标签则用分支名）
           cd backend
-          BACKEND_TAG=$(git describe --tags --abbrev=0 || echo "unknown")
-          cd ../frontend
-          FRONTEND_TAG=$(git describe --tags --abbrev=0 || echo "unknown")
+          BACKEND_TAG=$(git describe --tags --abbrev=0 2>/dev/null || git rev-parse --abbrev-ref HEAD)
+          cd ..
+          
+          # 获取前端版本（优先标签，无标签则用分支名）
+          cd frontend
+          FRONTEND_TAG=$(git describe --tags --abbrev=0 2>/dev/null || git rev-parse --abbrev-ref HEAD)
+          cd ..
+          
+          # 输出环境变量
           echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
           echo "BACKEND_TAG=$BACKEND_TAG" >> $GITHUB_ENV
           echo "FRONTEND_TAG=$FRONTEND_TAG" >> $GITHUB_ENV
 
-      # 步骤 3：安全打包（修复递归复制问题）
-      - name: Create full package
+      # 步骤 3：安全打包（仅保留目标压缩包）
+      - name: 创建完整代码包
         run: |
-          # 创建目标目录
+          # 创建临时目录
           mkdir -p package
-          # 复制文件（排除.git和.github）
+          
+          # 复制文件（排除不需要的目录）
           rsync -av --progress \
             --exclude='.git' \
             --exclude='.github' \
             --exclude='*.DS_Store' \
             --exclude='package' \
             ./ package/
-          # 重命名并压缩
-          mv package auth-matrix-${{ env.TAG_NAME }}
-          zip -r auth-matrix-${{ env.TAG_NAME }}-full.zip auth-matrix-${{ env.TAG_NAME }}
+          
+          # 重命名目录并压缩（命名为 auth-matrix.zip）
+          mv package auth-matrix
+          zip -r auth-matrix.zip auth-matrix
 
-      # 步骤 4：生成动态 Release 描述
-      - name: Generate release notes
+      # 步骤 4：生成中文 Release 描述
+      - name: 生成发布说明
         run: |
           cat << EOF > release-body.md
           ## 🚀 Auth-Matrix ${{ env.TAG_NAME }}
-
-          ### 📦 Component Versions
-          | Module  | Version   | Repository |
-          |---------|-----------|------------|
-          | Backend | ${{ env.BACKEND_TAG }} | [Link](${{ github.server_url }}/thirty30ww/auth-matrix-backend/tree/${{ env.BACKEND_TAG }}) |
-          | Frontend| ${{ env.FRONTEND_TAG }} | [Link](${{ github.server_url }}/thirty30ww/auth-matrix-frontend/tree/${{ env.FRONTEND_TAG }}) |
-
-          ### ⬇️ Installation
-          **Option 1: Clone with submodules**
+          
+          ### 📦 组件版本信息
+          | 模块   | 版本       | 仓库地址                                                                 |
+          |--------|------------|--------------------------------------------------------------------------|
+          | 后端   | ${{ env.BACKEND_TAG }} | [查看后端](${{ github.server_url }}/thirty30ww/auth-matrix-backend/tree/${{ env.BACKEND_TAG }}) |
+          | 前端   | ${{ env.FRONTEND_TAG }} | [查看前端](${{ github.server_url }}/thirty30ww/auth-matrix-frontend/tree/${{ env.FRONTEND_TAG }}) |
+          
+          ### ⬇️ 获取代码
+          **方式一：克隆仓库（推荐开发者）**
           \`\`\`bash
           git clone --recurse-submodules ${{ github.server_url }}/thirty30ww/auth-matrix.git -b ${{ env.TAG_NAME }}
           \`\`\`
-
-          **Option 2: Download ZIP**  
-          Use the \`auth-matrix-${{ env.TAG_NAME }}-full.zip\` attachment below.
+          
+          **方式二：下载完整包（适合部署）**  
+          直接下载下方的 \`auth-matrix.zip\` 即可使用，无需额外配置。
           EOF
 
-      # 步骤 5：创建 Release
-      - name: Create release
+      # 步骤 5：创建 Release（仅保留自定义资产）
+      - name: 创建 Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ env.TAG_NAME }}
           name: "Auth-Matrix ${{ env.TAG_NAME }}"
           body_path: release-body.md
-          files: auth-matrix-${{ env.TAG_NAME }}-full.zip
+          files: auth-matrix.zip  # 仅上传自定义压缩包
+          generate_release_notes: false  # 禁用默认的源码包生成
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

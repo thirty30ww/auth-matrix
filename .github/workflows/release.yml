@@ -1,0 +1,74 @@
+name: Auto Build and Release
+on:
+  push:
+    tags: v*  # 监听 v 开头的标签（如 v1.0.0）
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      # 步骤 1：拉取代码（强制 HTTPS 协议拉取子模块）
+      - name: Checkout with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          token: ${{ secrets.GITHUB_TOKEN }}  # 覆盖 .gitmodules 中的 SSH 协议
+          persist-credentials: true
+
+      # 步骤 2：获取版本信息（统一使用 github.ref_name）
+      - name: Extract version info
+        id: version-info
+        run: |
+          # 获取标签名（如 v1.0.0）
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+          # 进入子模块获取标签（确保已检出正确版本）
+          cd backend
+          BACKEND_TAG=$(git describe --tags --abbrev=0 || echo "unknown")
+          cd ../frontend
+          FRONTEND_TAG=$(git describe --tags --abbrev=0 || echo "unknown")
+          # 输出标准化变量
+          echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
+          echo "BACKEND_TAG=$BACKEND_TAG" >> $GITHUB_ENV
+          echo "FRONTEND_TAG=$FRONTEND_TAG" >> $GITHUB_ENV
+
+      # 步骤 3：打包完整代码（排除 .git 文件）
+      - name: Create full package
+        run: |
+          mkdir -p auth-matrix-${{ env.TAG_NAME }}
+          cp -r ./* auth-matrix-${{ env.TAG_NAME }}/
+          zip -r auth-matrix-${{ env.TAG_NAME }}-full.zip \
+            auth-matrix-${{ env.TAG_NAME }} \
+            -x "*.git*" ".github/*" "*.DS_Store"
+
+      # 步骤 4：生成动态 Markdown 描述（严格对齐变量）
+      - name: Generate release notes
+        run: |
+          cat << EOF > release-body.md
+          ## 🚀 Auth-Matrix ${{ env.TAG_NAME }}
+
+          ### 📦 组件版本
+          | 模块   | 版本       | 仓库地址                                                                 |
+          |--------|------------|--------------------------------------------------------------------------|
+          | 后端   | ${{ env.BACKEND_TAG }} | [backend](${{ github.server_url }}/thirty30ww/auth-matrix-backend/tree/${{ env.BACKEND_TAG }}) |
+          | 前端   | ${{ env.FRONTEND_TAG }} | [frontend](${{ github.server_url }}/thirty30ww/auth-matrix-frontend/tree/${{ env.FRONTEND_TAG }}) |
+
+          ### ⬇️ 获取代码
+          **方式一：克隆仓库**
+          \`\`\`bash
+          git clone --recurse-submodules ${{ github.server_url }}/thirty30ww/auth-matrix.git -b ${{ env.TAG_NAME }}
+          \`\`\`
+
+          **方式二：下载完整包**  
+          点击下方 \`auth-matrix-${{ env.TAG_NAME }}-full.zip\` 解压即用。
+          EOF
+
+      # 步骤 5：创建 Release（使用文件内容作为描述）
+      - name: Create release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ env.TAG_NAME }}
+          name: "Auth-Matrix ${{ env.TAG_NAME }}"
+          body_path: release-body.md  # 直接读取文件内容
+          files: auth-matrix-${{ env.TAG_NAME }}-full.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

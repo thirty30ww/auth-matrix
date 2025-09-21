@@ -15,13 +15,15 @@ Auth Matrix 是一套完整的权限管理系统，包含前端管理界面和�
 - **[后端服务](https://github.com/thirty30ww/auth-matrix-backend)** - Spring Boot 3 + MyBatis Plus
 - **[前端界面](https://github.com/thirty30ww/auth-matrix-frontend)** - Vue 3 + Element Plus
 
-## 🚀 克隆项目
+## 🚀 克隆项目（包括子模块）
 
 ```bash
-git clone https://github.com/thirty30ww/auth-matrix.git
-cd auth-matrix
-git submodule update --init --recursive
+# 以下两种方式选择其中一种
+git clone --recursive git@github.com:thirty30ww/auth-matrix.git # http方式
+git clone --recursive https://github.com/thirty30ww/auth-matrix.git # ssh方式
 ```
+
+或是前往releases中找到需要的版本，根据指引获取项目
 
 ## ✨ 主要功能
 

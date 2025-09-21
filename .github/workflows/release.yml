@@ -65,6 +65,17 @@ jobs:
           |--------|------------|----------|
           | 后端   | ${{ env.BACKEND_TAG }} | [查看](${{ env.BACKEND_REPO }}/releases/tag/${{ env.BACKEND_TAG }}) |
           | 前端   | ${{ env.FRONTEND_TAG }} | [查看](${{ env.FRONTEND_REPO }}/releases/tag/${{ env.FRONTEND_TAG }}) |
+
+          ## 🔻 代码获取方式
+          ### 方式一：完整包下载
+          直接下载右侧 auth-matrix.zip（已包含所有子模块的代码，无需手动下载）
+
+          ### 方式二：精准版本克隆
+          \`\`\`bash
+          # 克隆项目，两种中任意一种（包含子模块）
+          git clone --branch ${{ env.TAG_NAME }} --recursive https://github.com/thirty30ww/auth-matrix.git # 克隆项目，http方式
+          git clone --branch ${{ env.TAG_NAME }} --recursive git@github.com:thirty30ww/auth-matrix.git # 克隆项目，ssh方式
+          \`\`\`
           EOF
 
       # 步骤5：创建 Release

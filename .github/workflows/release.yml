@@ -6,6 +6,10 @@ on:
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
+    # 新增权限配置
+    permissions:
+      contents: write  # 允许创建 Release
+      packages: write  # 如需上传到 GitHub Packages
     steps:
       # 步骤 1：拉取代码（强制 HTTPS 协议拉取子模块）
       - name: Checkout with submodules

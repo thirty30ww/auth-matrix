@@ -9,35 +9,39 @@ jobs:
     permissions:
       contents: write
     steps:
-      # 步骤1：使用HTTPS方式拉取主仓库和子模块
+      # 步骤1：拉取主仓库和子模块
       - name: 拉取代码（含子模块）
         uses: actions/checkout@v4
         with:
           submodules: recursive
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}  # 使用GITHUB_TOKEN替代SSH
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-      # 步骤2：获取子模块版本信息
+      # 步骤2：获取子模块版本信息和仓库路径
       - name: 获取版本信息
         id: version-info
         run: |
           TAG_NAME=${GITHUB_REF#refs/tags/}
           
-          # 获取后端版本（使用git describe）
+          # 获取后端信息
           cd backend
           BACKEND_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "unknown")
+          BACKEND_REPO=$(git remote get-url origin | sed 's|git@github.com:||; s|\.git$||')
           cd ..
           
-          # 获取前端版本（使用git describe）
+          # 获取前端信息
           cd frontend
           FRONTEND_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "unknown")
+          FRONTEND_REPO=$(git remote get-url origin | sed 's|git@github.com:||; s|\.git$||')
           cd ..
           
           echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
           echo "BACKEND_TAG=$BACKEND_TAG" >> $GITHUB_ENV
           echo "FRONTEND_TAG=$FRONTEND_TAG" >> $GITHUB_ENV
+          echo "BACKEND_REPO=$BACKEND_REPO" >> $GITHUB_ENV
+          echo "FRONTEND_REPO=$FRONTEND_REPO" >> $GITHUB_ENV
 
-      # 步骤3-6保持不变（打包、生成说明、创建Release）
+      # 步骤3：打包完整代码
       - name: 创建完整代码包
         run: |
           mkdir -p package
@@ -50,18 +54,20 @@ jobs:
           mv package auth-matrix
           zip -r auth-matrix.zip auth-matrix
 
+      # 步骤4：生成带链接的发布说明
       - name: 生成发布说明
         run: |
           cat << EOF > release-body.md
           ## 🚀 Auth-Matrix ${{ env.TAG_NAME }}
           
           ### 📦 组件版本信息
-          | 模块   | 版本       |
-          |--------|------------|
-          | 后端   | ${{ env.BACKEND_TAG }} |
-          | 前端   | ${{ env.FRONTEND_TAG }} |
+          | 模块   | 版本       | 发布链接 |
+          |--------|------------|----------|
+          | 后端   | ${{ env.BACKEND_TAG }} | [查看](${{ env.BACKEND_REPO }}/releases/tag/${{ env.BACKEND_TAG }}) |
+          | 前端   | ${{ env.FRONTEND_TAG }} | [查看](${{ env.FRONTEND_REPO }}/releases/tag/${{ env.FRONTEND_TAG }}) |
           EOF
 
+      # 步骤5：创建 Release
       - name: 创建 Release
         uses: softprops/action-gh-release@v1
         with:

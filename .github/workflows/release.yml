@@ -1,7 +1,7 @@
 name: 自动构建与发布
 on:
   push:
-    tags: v*  # 监听 v 开头的标签（如 v1.0.0）
+    tags: v*
 
 jobs:
   build-and-release:
@@ -9,50 +9,35 @@ jobs:
     permissions:
       contents: write
     steps:
-      # 步骤 1：拉取主仓库（不包含子模块，后续手动处理）
-      - name: 拉取主仓库代码
+      # 步骤1：使用HTTPS方式拉取主仓库和子模块
+      - name: 拉取代码（含子模块）
         uses: actions/checkout@v4
         with:
-          submodules: false  # 先禁用自动子模块拉取
-          fetch-depth: 0     # 拉取完整历史
+          submodules: recursive
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}  # 使用GITHUB_TOKEN替代SSH
 
-      # 步骤 2：手动初始化子模块（解决权限和引用问题）
-      - name: 初始化子模块
-        run: |
-          # 配置 SSH 认证
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan github.com >> ~/.ssh/known_hosts
-
-          # 手动初始化子模块
-          git submodule init
-          git submodule update --force --recursive --remote
-
-      # 步骤 3：获取各仓库实际版本
+      # 步骤2：获取子模块版本信息
       - name: 获取版本信息
         id: version-info
         run: |
           TAG_NAME=${GITHUB_REF#refs/tags/}
           
-          # 获取后端最新标签
+          # 获取后端版本（使用git describe）
           cd backend
-          git fetch --tags --force
-          BACKEND_TAG=$(git describe --tags --abbrev=0 || echo "no-tag")
+          BACKEND_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "unknown")
           cd ..
           
-          # 获取前端最新标签
+          # 获取前端版本（使用git describe）
           cd frontend
-          git fetch --tags --force
-          FRONTEND_TAG=$(git describe --tags --abbrev=0 || echo "no-tag")
+          FRONTEND_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "unknown")
           cd ..
           
-          # 输出环境变量
           echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
           echo "BACKEND_TAG=$BACKEND_TAG" >> $GITHUB_ENV
           echo "FRONTEND_TAG=$FRONTEND_TAG" >> $GITHUB_ENV
 
-      # 步骤 4：打包（保持不变）
+      # 步骤3-6保持不变（打包、生成说明、创建Release）
       - name: 创建完整代码包
         run: |
           mkdir -p package
@@ -65,7 +50,6 @@ jobs:
           mv package auth-matrix
           zip -r auth-matrix.zip auth-matrix
 
-      # 步骤 5：生成 Release 描述
       - name: 生成发布说明
         run: |
           cat << EOF > release-body.md
@@ -76,12 +60,8 @@ jobs:
           |--------|------------|
           | 后端   | ${{ env.BACKEND_TAG }} |
           | 前端   | ${{ env.FRONTEND_TAG }} |
-          
-          ### ⬇️ 下载完整包
-          直接下载下方的 \`auth-matrix.zip\` 即可使用。
           EOF
 
-      # 步骤 6：创建 Release
       - name: 创建 Release
         uses: softprops/action-gh-release@v1
         with:

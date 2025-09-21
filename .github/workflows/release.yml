@@ -9,49 +9,52 @@ jobs:
     permissions:
       contents: write  # 允许创建 Release
     steps:
-      # 步骤 1：拉取代码（支持 SSH 子模块克隆）
+      # 步骤 1：拉取代码（含子模块和所有标签）
       - name: 拉取代码（含子模块）
         uses: actions/checkout@v4
         with:
-          submodules: recursive  # 递归拉取子模块
-          ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}  # 用于 SSH 子模块克隆（需配置）
+          submodules: recursive
+          fetch-depth: 0  # 拉取完整历史记录（包含所有标签）
+          ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
-      # 步骤 2：获取子模块版本（修复 unknown 问题）
+      # 步骤 2：获取各仓库实际版本标签
       - name: 获取版本信息
         id: version-info
         run: |
+          # 获取主仓库标签
           TAG_NAME=${GITHUB_REF#refs/tags/}
           
-          # 获取后端版本（优先标签，无标签则用分支名）
+          # 获取后端实际版本标签
           cd backend
-          BACKEND_TAG=$(git describe --tags --abbrev=0 2>/dev/null || git rev-parse --abbrev-ref HEAD)
+          git fetch --tags --force
+          BACKEND_TAG=$(git for-each-ref --sort=-creatordate --format '%(refname:short)' refs/tags | head -1)
+          BACKEND_LINK="${{ github.server_url }}/thirty30ww/auth-matrix-backend/tree/${BACKEND_TAG}"
           cd ..
           
-          # 获取前端版本（优先标签，无标签则用分支名）
+          # 获取前端实际版本标签
           cd frontend
-          FRONTEND_TAG=$(git describe --tags --abbrev=0 2>/dev/null || git rev-parse --abbrev-ref HEAD)
+          git fetch --tags --force
+          FRONTEND_TAG=$(git for-each-ref --sort=-creatordate --format '%(refname:short)' refs/tags | head -1)
+          FRONTEND_LINK="${{ github.server_url }}/thirty30ww/auth-matrix-frontend/tree/${FRONTEND_TAG}"
           cd ..
           
           # 输出环境变量
-          echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
-          echo "BACKEND_TAG=$BACKEND_TAG" >> $GITHUB_ENV
-          echo "FRONTEND_TAG=$FRONTEND_TAG" >> $GITHUB_ENV
+          echo "TAG_NAME=${TAG_NAME}" >> $GITHUB_ENV
+          echo "BACKEND_TAG=${BACKEND_TAG}" >> $GITHUB_ENV
+          echo "FRONTEND_TAG=${FRONTEND_TAG}" >> $GITHUB_ENV
+          echo "BACKEND_LINK=${BACKEND_LINK}" >> $GITHUB_ENV
+          echo "FRONTEND_LINK=${FRONTEND_LINK}" >> $GITHUB_ENV
 
-      # 步骤 3：安全打包（仅保留目标压缩包）
+      # 步骤 3：安全打包
       - name: 创建完整代码包
         run: |
-          # 创建临时目录
           mkdir -p package
-          
-          # 复制文件（排除不需要的目录）
           rsync -av --progress \
             --exclude='.git' \
             --exclude='.github' \
             --exclude='*.DS_Store' \
             --exclude='package' \
             ./ package/
-          
-          # 重命名目录并压缩（命名为 auth-matrix.zip）
           mv package auth-matrix
           zip -r auth-matrix.zip auth-matrix
 
@@ -64,8 +67,8 @@ jobs:
           ### 📦 组件版本信息
           | 模块   | 版本       | 仓库地址                                                                 |
           |--------|------------|--------------------------------------------------------------------------|
-          | 后端   | ${{ env.BACKEND_TAG }} | [查看后端](${{ github.server_url }}/thirty30ww/auth-matrix-backend/tree/${{ env.BACKEND_TAG }}) |
-          | 前端   | ${{ env.FRONTEND_TAG }} | [查看前端](${{ github.server_url }}/thirty30ww/auth-matrix-frontend/tree/${{ env.FRONTEND_TAG }}) |
+          | 后端   | ${{ env.BACKEND_TAG }} | [查看后端](${{ env.BACKEND_LINK }}) |
+          | 前端   | ${{ env.FRONTEND_TAG }} | [查看前端](${{ env.FRONTEND_LINK }}) |
           
           ### ⬇️ 获取代码
           **方式一：克隆仓库（推荐开发者）**
@@ -77,14 +80,14 @@ jobs:
           直接下载下方的 \`auth-matrix.zip\` 即可使用，无需额外配置。
           EOF
 
-      # 步骤 5：创建 Release（仅保留自定义资产）
+      # 步骤 5：创建 Release
       - name: 创建 Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ env.TAG_NAME }}
           name: "Auth-Matrix ${{ env.TAG_NAME }}"
           body_path: release-body.md
-          files: auth-matrix.zip  # 仅上传自定义压缩包
-          generate_release_notes: false  # 禁用默认的源码包生成
+          files: auth-matrix.zip
+          generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

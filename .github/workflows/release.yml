@@ -7,45 +7,52 @@ jobs:
   build-and-release:
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # 允许创建 Release
+      contents: write
     steps:
-      # 步骤 1：拉取代码（含子模块和所有标签）
-      - name: 拉取代码（含子模块）
+      # 步骤 1：拉取主仓库（不包含子模块，后续手动处理）
+      - name: 拉取主仓库代码
         uses: actions/checkout@v4
         with:
-          submodules: recursive
-          fetch-depth: 0  # 拉取完整历史记录（包含所有标签）
-          ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}
+          submodules: false  # 先禁用自动子模块拉取
+          fetch-depth: 0     # 拉取完整历史
 
-      # 步骤 2：获取各仓库实际版本标签
+      # 步骤 2：手动初始化子模块（解决权限和引用问题）
+      - name: 初始化子模块
+        run: |
+          # 配置 SSH 认证
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+
+          # 手动初始化子模块
+          git submodule init
+          git submodule update --force --recursive --remote
+
+      # 步骤 3：获取各仓库实际版本
       - name: 获取版本信息
         id: version-info
         run: |
-          # 获取主仓库标签
           TAG_NAME=${GITHUB_REF#refs/tags/}
           
-          # 获取后端实际版本标签
+          # 获取后端最新标签
           cd backend
           git fetch --tags --force
-          BACKEND_TAG=$(git for-each-ref --sort=-creatordate --format '%(refname:short)' refs/tags | head -1)
-          BACKEND_LINK="${{ github.server_url }}/thirty30ww/auth-matrix-backend/tree/${BACKEND_TAG}"
+          BACKEND_TAG=$(git describe --tags --abbrev=0 || echo "no-tag")
           cd ..
           
-          # 获取前端实际版本标签
+          # 获取前端最新标签
           cd frontend
           git fetch --tags --force
-          FRONTEND_TAG=$(git for-each-ref --sort=-creatordate --format '%(refname:short)' refs/tags | head -1)
-          FRONTEND_LINK="${{ github.server_url }}/thirty30ww/auth-matrix-frontend/tree/${FRONTEND_TAG}"
+          FRONTEND_TAG=$(git describe --tags --abbrev=0 || echo "no-tag")
           cd ..
           
           # 输出环境变量
-          echo "TAG_NAME=${TAG_NAME}" >> $GITHUB_ENV
-          echo "BACKEND_TAG=${BACKEND_TAG}" >> $GITHUB_ENV
-          echo "FRONTEND_TAG=${FRONTEND_TAG}" >> $GITHUB_ENV
-          echo "BACKEND_LINK=${BACKEND_LINK}" >> $GITHUB_ENV
-          echo "FRONTEND_LINK=${FRONTEND_LINK}" >> $GITHUB_ENV
+          echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
+          echo "BACKEND_TAG=$BACKEND_TAG" >> $GITHUB_ENV
+          echo "FRONTEND_TAG=$FRONTEND_TAG" >> $GITHUB_ENV
 
-      # 步骤 3：安全打包
+      # 步骤 4：打包（保持不变）
       - name: 创建完整代码包
         run: |
           mkdir -p package
@@ -58,29 +65,23 @@ jobs:
           mv package auth-matrix
           zip -r auth-matrix.zip auth-matrix
 
-      # 步骤 4：生成中文 Release 描述
+      # 步骤 5：生成 Release 描述
       - name: 生成发布说明
         run: |
           cat << EOF > release-body.md
           ## 🚀 Auth-Matrix ${{ env.TAG_NAME }}
           
           ### 📦 组件版本信息
-          | 模块   | 版本       | 仓库地址                                                                 |
-          |--------|------------|--------------------------------------------------------------------------|
-          | 后端   | ${{ env.BACKEND_TAG }} | [查看后端](${{ env.BACKEND_LINK }}) |
-          | 前端   | ${{ env.FRONTEND_TAG }} | [查看前端](${{ env.FRONTEND_LINK }}) |
+          | 模块   | 版本       |
+          |--------|------------|
+          | 后端   | ${{ env.BACKEND_TAG }} |
+          | 前端   | ${{ env.FRONTEND_TAG }} |
           
-          ### ⬇️ 获取代码
-          **方式一：克隆仓库（推荐开发者）**
-          \`\`\`bash
-          git clone --recurse-submodules ${{ github.server_url }}/thirty30ww/auth-matrix.git -b ${{ env.TAG_NAME }}
-          \`\`\`
-          
-          **方式二：下载完整包（适合部署）**  
-          直接下载下方的 \`auth-matrix.zip\` 即可使用，无需额外配置。
+          ### ⬇️ 下载完整包
+          直接下载下方的 \`auth-matrix.zip\` 即可使用。
           EOF
 
-      # 步骤 5：创建 Release
+      # 步骤 6：创建 Release
       - name: 创建 Release
         uses: softprops/action-gh-release@v1
         with:
@@ -89,5 +90,3 @@ jobs:
           body_path: release-body.md
           files: auth-matrix.zip
           generate_release_notes: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

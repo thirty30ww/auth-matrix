@@ -32,6 +32,12 @@ git clone --recursive https://github.com/thirty30ww/auth-matrix.git # ssh方式
 - 📋 菜单管理 - 菜单树配置、权限码设置
 - 📊 日志监控 - 登录日志、操作审计
 
+## 🔗 生态项目
+
+- **前端项目**：[Auth Matrix Frontend](https://github.com/thirty30ww/auth-matrix-frontend) - Vue3 + Element Plus权限管理前端
+- **后端项目**：[Auth Matrix Backend](https://github.com/thirty30ww/auth-matrix-backend) - Spring Boot权限管理后端
+- **Docker部署**：支持容器化部署
+
 ## 📄 开源协议
 
 基于 [MIT](LICENSE) 协议开源，支持商业使用。

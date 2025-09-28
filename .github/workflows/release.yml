@@ -17,14 +17,19 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      # 步骤2：获取标签描述信息和子模块版本
+      # 步骤2：获取版本描述信息和子模块版本
       - name: 获取版本信息
         id: version-info
         run: |
           TAG_NAME=${GITHUB_REF#refs/tags/}
           
-          # 获取标签描述信息
-          TAG_MESSAGE=$(git tag -l --format='%(contents)' $TAG_NAME)
+          # 从version目录获取版本描述信息
+          VERSION_FILE="version/${TAG_NAME}.md"
+          if [ -f "$VERSION_FILE" ]; then
+            TAG_MESSAGE=$(cat "$VERSION_FILE")
+          else
+            TAG_MESSAGE=""
+          fi
           
           # 获取后端信息
           cd backend
@@ -60,14 +65,23 @@ jobs:
           mv package auth-matrix
           zip -r auth-matrix.zip auth-matrix
 
-      # 步骤4：生成带链接和标签描述的发布说明
+      # 步骤4：生成带链接和版本描述的发布说明
       - name: 生成发布说明
         run: |
           cat << EOF > release-body.md
           ## 🚀 Auth-Matrix ${{ env.TAG_NAME }}
+          EOF
+          
+          # 如果有版本描述，则添加版本描述部分
+          if [ -n "${{ env.TAG_MESSAGE }}" ]; then
+            cat << EOF >> release-body.md
           
           ### 📝 版本描述
           ${{ env.TAG_MESSAGE }}
+          EOF
+          fi
+          
+          cat << EOF >> release-body.md
           
           ### 📦 组件版本信息
           | 模块   | 版本       | 发布链接 |

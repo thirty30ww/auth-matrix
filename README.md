@@ -19,8 +19,8 @@ Auth Matrix 是一套完整的权限管理系统，包含前端管理界面和�
 
 ```bash
 # 以下两种方式选择其中一种
-git clone --recursive git@github.com:thirty30ww/auth-matrix.git # http方式
-git clone --recursive https://github.com/thirty30ww/auth-matrix.git # ssh方式
+git clone --recursive git@github.com:thirty30ww/auth-matrix.git # ssh方式
+git clone --recursive https://github.com/thirty30ww/auth-matrix.git # http方式
 ```
 
 或是前往releases中找到需要的版本，根据指引获取项目
